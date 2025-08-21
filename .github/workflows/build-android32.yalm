@@ -1,0 +1,50 @@
+name: Build Android ARM32
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GOOS: android
+      GOARCH: arm
+      GOARM: 7
+      CGO_ENABLED: 0
+
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v5
+
+      - name: Set up NDK
+        run: |
+          wget -qO android-ndk.zip https://dl.google.com/android/repository/android-ndk-r28b-linux.zip
+          unzip android-ndk.zip
+          rm android-ndk.zip
+          echo CC="$(realpath android-ndk-*/toolchains/llvm/prebuilt/linux-x86_64/bin)/armv7a-linux-androideabi24-clang" >> $GITHUB_ENV
+          echo CGO_ENABLED=1 >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Get project dependencies
+        run: go mod download
+
+      - name: Build Xray (Android ARM32)
+        run: |
+          mkdir -p build_assets
+          COMMID=$(git describe --always --dirty)
+          go build -o build_assets/xray-arm32 -trimpath -buildvcs=false \
+            -ldflags="-X github.com/xtls/xray-core/core.build=${COMMID} -s -w -buildid=" \
+            -v ./main
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xray-android-arm32
+          path: build_assets/*
